@@ -15,17 +15,12 @@ function onMenuSelect(item: TopBarMenuItem) {
 </script>
 
 <template>
-  <TopBar :user-name="auth.user.value?.name" @select="onMenuSelect">
-    <span class="app-name">Teaz Pulse</span>
-  </TopBar>
+  <TopBar
+    app-name="Pulse"
+    home-url="https://portal.teaz.pro"
+    :user-name="auth.user.value?.name"
+    @select="onMenuSelect"
+  />
 
   <ContainersView />
 </template>
-
-<style scoped>
-.app-name {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-</style>
