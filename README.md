@@ -23,7 +23,7 @@ Pulse only sees containers that opt in with labels:
 
 | Label | Value | Effect |
 | ----- | ----- | ------ |
-| `pro.teaz.pulse.app` | App display name, e.g. `Teaz Portal` | Container is managed by Pulse and grouped under that name. |
+| `pro.teaz.pulse.app` | App display name, short and without "Teaz": `Portal`, `Study`, `Keycloak` | Container is managed by Pulse and grouped under that name. |
 | `pro.teaz.pulse.protected` | `true` | Restart only, no stop. |
 
 Protect everything Pulse itself depends on: stopping Traefik, Keycloak,
@@ -34,7 +34,7 @@ already), e.g.:
 
 ```yaml
     labels:
-      - pro.teaz.pulse.app=Teaz Portal
+      - pro.teaz.pulse.app=Portal
 ```
 
 For the shared services, add to their compose files on the VPS:
@@ -115,7 +115,7 @@ token (any Teaz app's token works, same realm):
   "checkedAt": "2026-10-17T11:31:50.728Z",
   "apps": [
     { "name": "Keycloak", "status": "good", "running": 2, "total": 2 },
-    { "name": "Teaz Portal", "status": "warning", "running": 2, "total": 2 }
+    { "name": "Portal", "status": "warning", "running": 2, "total": 2 }
   ]
 }
 ```

@@ -12,7 +12,7 @@ services:
       - traefik.http.routers.pulse.tls.certresolver=le
       - traefik.http.services.pulse.loadbalancer.server.port=80
       # Pulse shows itself, but can't be stopped from itself.
-      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.app=Pulse
       - pro.teaz.pulse.protected=true
 
   backend:
@@ -30,7 +30,7 @@ services:
       - traefik.http.services.pulse-api.loadbalancer.server.port=8080
       # Traefik must only route to it via "proxy", not the internal docker-api network.
       - traefik.docker.network=proxy
-      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.app=Pulse
       - pro.teaz.pulse.protected=true
 
   # The backend never gets the Docker socket itself: it talks to this proxy,
@@ -59,7 +59,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks: [docker-api]
     labels:
-      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.app=Pulse
       - pro.teaz.pulse.protected=true
 
 networks:

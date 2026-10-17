@@ -40,7 +40,7 @@ class SecurityConfigTests {
 	@BeforeEach
 	void containers() {
 		when(docker.listManagedContainers()).thenReturn(List.of(new DockerContainer(
-				"abc", "portal-backend-1", "Teaz Portal", "backend", "img", "running", null, null, null, 0, false)));
+				"abc", "portal-backend-1", "Portal", "backend", "img", "running", null, null, null, 0, false)));
 	}
 
 	@Test

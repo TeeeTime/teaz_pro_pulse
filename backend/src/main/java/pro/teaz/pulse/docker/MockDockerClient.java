@@ -24,10 +24,10 @@ public class MockDockerClient implements DockerClient {
 		add("traefik", "Traefik", "traefik", "traefik:v3.4", "running", null, now.minus(Duration.ofDays(12)), 0, true);
 		add("keycloak", "Keycloak", "keycloak", "quay.io/keycloak/keycloak:26.2", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
 		add("keycloak-db", "Keycloak", "postgres", "postgres:17", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
-		add("portal-frontend", "Teaz Portal", "frontend", "teaz_pro_portal-frontend", "running", null, now.minus(Duration.ofHours(5)), 0, false);
-		add("portal-backend", "Teaz Portal", "backend", "teaz_pro_portal-backend", "running", "unhealthy", now.minus(Duration.ofHours(5)), 3, false);
-		add("pulse-frontend", "Teaz Pulse", "frontend", "teaz_pro_pulse-frontend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
-		add("pulse-backend", "Teaz Pulse", "backend", "teaz_pro_pulse-backend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
+		add("portal-frontend", "Portal", "frontend", "teaz_pro_portal-frontend", "running", null, now.minus(Duration.ofHours(5)), 0, false);
+		add("portal-backend", "Portal", "backend", "teaz_pro_portal-backend", "running", "unhealthy", now.minus(Duration.ofHours(5)), 3, false);
+		add("pulse-frontend", "Pulse", "frontend", "teaz_pro_pulse-frontend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
+		add("pulse-backend", "Pulse", "backend", "teaz_pro_pulse-backend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
 		add("demo-worker", "Demo", "worker", "teaz_pro_demo-worker", "exited", null, null, 1, false);
 	}
 

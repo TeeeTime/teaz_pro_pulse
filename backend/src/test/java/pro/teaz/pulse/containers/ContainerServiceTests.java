@@ -26,8 +26,8 @@ class ContainerServiceTests {
 	@BeforeEach
 	void containers() {
 		when(docker.listManagedContainers()).thenReturn(List.of(
-				container("p-front", "Teaz Portal", "frontend", "running", null, false),
-				container("p-back", "Teaz Portal", "backend", "running", "unhealthy", false),
+				container("p-front", "Portal", "frontend", "running", null, false),
+				container("p-back", "Portal", "backend", "running", "unhealthy", false),
 				container("traefik", "Traefik", "traefik", "running", null, true),
 				container("kc", "Keycloak", "keycloak", "running", "starting", true),
 				container("worker", "Demo", "worker", "exited", null, false)));
@@ -51,7 +51,7 @@ class ContainerServiceTests {
 		assertThat(health.apps()).containsExactly(
 				new HealthSummary.AppHealth("Demo", Status.CRITICAL, 0, 1),
 				new HealthSummary.AppHealth("Keycloak", Status.WARNING, 1, 1),
-				new HealthSummary.AppHealth("Teaz Portal", Status.CRITICAL, 2, 2),
+				new HealthSummary.AppHealth("Portal", Status.CRITICAL, 2, 2),
 				new HealthSummary.AppHealth("Traefik", Status.GOOD, 1, 1));
 	}
 
