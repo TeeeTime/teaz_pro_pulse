@@ -1,0 +1,70 @@
+# Production deploy on the VPS: `docker compose up -d --build`.
+# Expects the shared Traefik instance on the external "proxy" network
+# with a certificate resolver named "le", and DOCKER_GID in .env (see README).
+services:
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    networks: [proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pulse.rule=Host(`pulse.teaz.pro`)
+      - traefik.http.routers.pulse.tls.certresolver=le
+      - traefik.http.services.pulse.loadbalancer.server.port=80
+      # Pulse shows itself, but can't be stopped from itself.
+      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.protected=true
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on: [docker-proxy]
+    networks: [proxy, docker-api]
+    labels:
+      - traefik.enable=true
+      # Same host, /api only; Traefik prefers this longer rule over the frontend's.
+      - traefik.http.routers.pulse-api.rule=Host(`pulse.teaz.pro`) && PathPrefix(`/api`)
+      - traefik.http.routers.pulse-api.tls.certresolver=le
+      - traefik.http.services.pulse-api.loadbalancer.server.port=8080
+      # Traefik must only route to it via "proxy", not the internal docker-api network.
+      - traefik.docker.network=proxy
+      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.protected=true
+
+  # The backend never gets the Docker socket itself: it talks to this proxy,
+  # which lets through exactly the calls Pulse makes (list/inspect containers,
+  # start/stop/restart one) and refuses everything else (create, exec, images,
+  # volumes, ...). Read access to the socket is effectively root on the host,
+  # so this is the one place it is mounted.
+  docker-proxy:
+    image: wollomatic/socket-proxy:1.13.1
+    restart: unless-stopped
+    user: "65534:${DOCKER_GID:?set DOCKER_GID in .env, see README}"
+    mem_limit: 64M
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    command:
+      - '-loglevel=info'
+      - '-listenip=0.0.0.0'
+      - '-allowfrom=backend'
+      - '-allowGET=/v1\.[0-9]+/containers/(json|[a-zA-Z0-9_.-]+/json)'
+      - '-allowPOST=/v1\.[0-9]+/containers/[a-zA-Z0-9_.-]+/(start|stop|restart)'
+      - '-watchdoginterval=3600'
+      - '-stoponwatchdog'
+      - '-shutdowngracetime=5'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker-api]
+    labels:
+      - pro.teaz.pulse.app=Teaz Pulse
+      - pro.teaz.pulse.protected=true
+
+networks:
+  proxy:
+    external: true
+  # Backend <-> socket proxy only. internal: no route to the outside world.
+  docker-api:
+    internal: true

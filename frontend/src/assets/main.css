@@ -1,0 +1,6 @@
+@import '@teeetime/teaz-pro-ui/themes.css';
+@import '@teeetime/teaz-pro-ui/base.css';
+
+#app {
+  min-height: 100vh;
+}
