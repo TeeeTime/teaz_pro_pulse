@@ -59,6 +59,7 @@ class SecurityConfigTests {
 		mvc.perform(get("/api/health")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/containers")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/metrics")).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/load")).andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -70,6 +71,14 @@ class SecurityConfigTests {
 	@Test
 	void healthIsOpenToAnyLoggedInUser() throws Exception {
 		mvc.perform(get("/api/health").with(jwt())).andExpect(status().isOk());
+	}
+
+	@Test
+	void loadIsOpenToAnyLoggedInUser() throws Exception {
+		when(host.sample()).thenReturn(new HostSample(10, 100, 2, new double[] {0, 0, 0}, 1000, 500, 2000, 1000));
+		sampler.sample();
+
+		mvc.perform(get("/api/load").with(jwt())).andExpect(status().isOk());
 	}
 
 	@Test
@@ -91,8 +100,14 @@ class SecurityConfigTests {
 	}
 
 	@Test
-	void onlyHealthIsSharedCrossOrigin() throws Exception {
+	void onlyHealthAndLoadAreSharedCrossOrigin() throws Exception {
 		mvc.perform(options("/api/health")
+				.header("Origin", "https://portal.teaz.pro")
+				.header("Access-Control-Request-Method", "GET")
+				.header("Access-Control-Request-Headers", "Authorization"))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Access-Control-Allow-Origin", "https://portal.teaz.pro"));
+		mvc.perform(options("/api/load")
 				.header("Origin", "https://portal.teaz.pro")
 				.header("Access-Control-Request-Method", "GET")
 				.header("Access-Control-Request-Headers", "Authorization"))

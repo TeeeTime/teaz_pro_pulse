@@ -7,7 +7,8 @@ container in the Teaz ecosystem (apps, Traefik, Keycloak, Postgres).
 - **Performance** (second view, switch at the top): the server's CPU, memory
   and disk, the Teaz containers' share of it, the last hour as charts, and
   each Teaz container's CPU, memory, network and disk I/O.
-- Serves `GET /api/health`, the health of every app, for other apps (Portal's status tile).
+- Serves `GET /api/health`, the health of every app, and `GET /api/load`, the
+  server's CPU and memory charts, for other apps (Portal's tiles).
 
 Monorepo: `frontend/` (Vue 3 + TypeScript) and `backend/` (Spring Boot, `pro.teaz:pulse`).
 
@@ -124,9 +125,9 @@ The Docker Engine API version is set by `pulse.docker.api-version`
 - Backend `backend/src/main/java/pro/teaz/pulse/security/`, with the `prod` profile:
   - `/api/containers/**` (list, start, stop, restart) and `/api/metrics`
     (Performance) need the Keycloak realm role **`pulse-admin`**.
-  - `/api/health` is open to any logged-in user, also cross-origin from the
-    origins in `pulse.cors.allowed-origins` (`application-prod.properties`,
-    currently `https://portal.teaz.pro`).
+  - `/api/health` and `/api/load` are open to any logged-in user, also
+    cross-origin from the origins in `pulse.cors.allowed-origins`
+    (`application-prod.properties`, currently `https://portal.teaz.pro`).
   - Without the `prod` profile everything is permitted.
 
 Keycloak setup:
@@ -165,6 +166,37 @@ const res = await fetch('https://pulse.teaz.pro/api/health', {
 
 A new app that should read it: add its origin to `pulse.cors.allowed-origins`.
 If Docker is unreachable, Pulse answers `503`.
+
+### Load
+
+`GET https://pulse.teaz.pro/api/load`, same token and origins as `/api/health`:
+the data behind the Performance view's CPU and memory charts, without any
+container details (`metrics/LoadSummary.java`).
+
+```json
+{
+  "sampledAt": "2026-10-23T12:00:00Z",
+  "intervalSeconds": 10,
+  "historySeconds": 3600,
+  "cores": 4,
+  "memoryTotalBytes": 8589934592,
+  "host": { "cpuPercent": 34.2, "memoryBytes": 3650722201 },
+  "teaz": { "cpuPercent": 12.8, "memoryBytes": 1288490188 },
+  "history": [
+    { "at": "2026-10-23T11:00:10Z", "hostCpuPercent": 31.0, "teazCpuPercent": 11.5,
+      "hostMemoryBytes": 3600000000, "teazMemoryBytes": 1270000000 }
+  ]
+}
+```
+
+- `host` is the whole server, `teaz` the Teaz containers' part of it.
+- CPU is a share of all cores together (0–100); chart it against `100`.
+  Memory in bytes; chart it against `memoryTotalBytes`.
+- `history`: one point every `intervalSeconds`, oldest first, at most
+  `historySeconds` back (empty right after Pulse started, then filling up).
+  Use `historySeconds` as the x axis' width so a short history doesn't stretch.
+- `cpuPercent` is `null` for the first 10 seconds after Pulse starts; before
+  the first measurement at all, Pulse answers `503`.
 
 ## Running locally
 

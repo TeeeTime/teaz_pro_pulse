@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * Settings under {@code pulse.*}, see application.properties.
  *
  * @param docker how to reach the Docker Engine API
- * @param cors origins (other Teaz apps) allowed to read {@code /api/health}
+ * @param cors origins (other Teaz apps) allowed to read {@code /api/health} and {@code /api/load}
  * @param metrics how often the server is measured and how much of it is kept
  */
 @ConfigurationProperties("pulse")

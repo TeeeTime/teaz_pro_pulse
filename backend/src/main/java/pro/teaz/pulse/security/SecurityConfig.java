@@ -21,8 +21,8 @@ import pro.teaz.pulse.PulseProperties;
  * Production security: every request needs a valid Keycloak access token
  * (Bearer JWT) issued by the realm configured in application-prod.properties.
  * Managing containers and the server's metrics additionally need the realm role {@value #ADMIN_ROLE};
- * {@code /api/health} is open to any logged-in user, also cross-origin
- * from the other Teaz apps.
+ * {@code /api/health} and {@code /api/load} are open to any logged-in user,
+ * also cross-origin from the other Teaz apps.
  */
 @Configuration
 @Profile("prod")
@@ -34,7 +34,7 @@ public class SecurityConfig {
 	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		http
 			.authorizeHttpRequests(auth -> auth
-				.requestMatchers(HttpMethod.GET, "/api/health").authenticated()
+				.requestMatchers(HttpMethod.GET, "/api/health", "/api/load").authenticated()
 				.requestMatchers("/api/containers/**", "/api/metrics/**").hasRole(ADMIN_ROLE)
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
@@ -50,16 +50,17 @@ public class SecurityConfig {
 		return converter;
 	}
 
-	/** Picked up by {@code .cors()} above. Only the health endpoint is shared. */
+	/** Picked up by {@code .cors()} above. Only the endpoints for other apps are shared. */
 	@Bean
 	CorsConfigurationSource corsConfigurationSource(PulseProperties properties) {
-		CorsConfiguration health = new CorsConfiguration();
-		health.setAllowedOrigins(properties.cors().allowedOrigins());
-		health.setAllowedMethods(List.of("GET"));
-		health.setAllowedHeaders(List.of("Authorization"));
+		CorsConfiguration shared = new CorsConfiguration();
+		shared.setAllowedOrigins(properties.cors().allowedOrigins());
+		shared.setAllowedMethods(List.of("GET"));
+		shared.setAllowedHeaders(List.of("Authorization"));
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-		source.registerCorsConfiguration("/api/health", health);
+		source.registerCorsConfiguration("/api/health", shared);
+		source.registerCorsConfiguration("/api/load", shared);
 		return source;
 	}
 }
