@@ -129,7 +129,8 @@ onBeforeUnmount(() => {
 .containers {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  /* Below the view switch in App.vue. */
+  padding: 16px 24px 64px;
 }
 
 .containers__header {
@@ -219,7 +220,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 420px) {
   .containers {
-    padding: 24px 12px 48px;
+    padding: 16px 12px 48px;
   }
 }
 </style>

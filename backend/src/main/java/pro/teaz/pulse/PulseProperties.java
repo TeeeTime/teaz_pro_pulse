@@ -1,5 +1,6 @@
 package pro.teaz.pulse;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -10,9 +11,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *
  * @param docker how to reach the Docker Engine API
  * @param cors origins (other Teaz apps) allowed to read {@code /api/health}
+ * @param metrics how often the server is measured and how much of it is kept
  */
 @ConfigurationProperties("pulse")
-public record PulseProperties(Docker docker, @DefaultValue Cors cors) {
+public record PulseProperties(Docker docker, @DefaultValue Cors cors, @DefaultValue Metrics metrics) {
 
 	/**
 	 * @param url        Docker Engine API base URL (the socket proxy); unset = mock data
@@ -22,5 +24,12 @@ public record PulseProperties(Docker docker, @DefaultValue Cors cors) {
 	}
 
 	public record Cors(@DefaultValue List<String> allowedOrigins) {
+	}
+
+	/**
+	 * @param interval time between two measurements
+	 * @param history  how far back the charts go (kept in memory)
+	 */
+	public record Metrics(@DefaultValue("10s") Duration interval, @DefaultValue("1h") Duration history) {
 	}
 }

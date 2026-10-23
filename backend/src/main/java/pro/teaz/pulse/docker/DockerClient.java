@@ -12,6 +12,9 @@ public interface DockerClient {
 	/** All containers carrying {@link DockerContainer#APP_LABEL}, running or not. */
 	List<DockerContainer> listManagedContainers();
 
+	/** Current resource counters of a running container. */
+	ContainerStats stats(String id);
+
 	void start(String id);
 
 	void stop(String id);

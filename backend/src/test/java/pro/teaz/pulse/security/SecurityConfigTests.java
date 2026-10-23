@@ -22,6 +22,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import pro.teaz.pulse.docker.DockerClient;
 import pro.teaz.pulse.docker.DockerContainer;
+import pro.teaz.pulse.metrics.HostProbe;
+import pro.teaz.pulse.metrics.HostSample;
+import pro.teaz.pulse.metrics.MetricsSampler;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,6 +40,13 @@ class SecurityConfigTests {
 	@MockitoBean
 	DockerClient docker;
 
+	// Prod would read the VPS's /proc.
+	@MockitoBean
+	HostProbe host;
+
+	@Autowired
+	MetricsSampler sampler;
+
 	@BeforeEach
 	void containers() {
 		when(docker.listManagedContainers()).thenReturn(List.of(new DockerContainer(
@@ -48,6 +58,7 @@ class SecurityConfigTests {
 		mvc.perform(get("/")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/health")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/containers")).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/metrics")).andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -71,6 +82,15 @@ class SecurityConfigTests {
 	}
 
 	@Test
+	void metricsNeedAdminRole() throws Exception {
+		when(host.sample()).thenReturn(new HostSample(10, 100, 2, new double[] {0, 0, 0}, 1000, 500, 2000, 1000));
+		sampler.sample();
+
+		mvc.perform(get("/api/metrics").with(jwt())).andExpect(status().isForbidden());
+		mvc.perform(get("/api/metrics").with(jwt().authorities(ADMIN))).andExpect(status().isOk());
+	}
+
+	@Test
 	void onlyHealthIsSharedCrossOrigin() throws Exception {
 		mvc.perform(options("/api/health")
 				.header("Origin", "https://portal.teaz.pro")
@@ -80,6 +100,10 @@ class SecurityConfigTests {
 			.andExpect(header().string("Access-Control-Allow-Origin", "https://portal.teaz.pro"));
 
 		mvc.perform(options("/api/containers")
+				.header("Origin", "https://portal.teaz.pro")
+				.header("Access-Control-Request-Method", "GET"))
+			.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+		mvc.perform(options("/api/metrics")
 				.header("Origin", "https://portal.teaz.pro")
 				.header("Access-Control-Request-Method", "GET"))
 			.andExpect(header().doesNotExist("Access-Control-Allow-Origin"));

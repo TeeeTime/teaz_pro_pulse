@@ -4,6 +4,9 @@ container in the Teaz ecosystem (apps, Traefik, Keycloak, Postgres).
 
 - Shows each container's status, health check, uptime and restarts, grouped by app.
 - Starts, stops and restarts containers (stop/restart ask for a second click).
+- **Performance** (second view, switch at the top): the server's CPU, memory
+  and disk, the Teaz containers' share of it, the last hour as charts, and
+  each Teaz container's CPU, memory, network and disk I/O.
 - Serves `GET /api/health`, the health of every app, for other apps (Portal's status tile).
 
 Monorepo: `frontend/` (Vue 3 + TypeScript) and `backend/` (Spring Boot, `pro.teaz:pulse`).
@@ -68,6 +71,34 @@ in that project afterwards.
 An app's status is the worst of its containers. "Down" includes containers
 stopped on purpose.
 
+## Performance
+
+The view switch at the top of the page (`?view=performance` in the URL)
+changes between the container list and this view. Every 10 seconds
+(`pulse.metrics.interval`), whether anyone is looking or not, the backend
+(`metrics/MetricsSampler.java`) measures:
+
+| What | From |
+| ---- | ---- |
+| The server: CPU (all cores together), load average, RAM, disk | `/proc/stat`, `/proc/loadavg`, `/proc/meminfo` inside Pulse's container. Docker doesn't isolate those files, so they show the whole server; no mount or extra privilege needed. Disk is the filesystem holding Docker's data (usually the root disk). |
+| Each running Teaz container: CPU, memory, network, disk I/O | Docker's stats (`GET /containers/<id>/stats`, one reading per round), only for containers with `pro.teaz.pulse.app`. |
+| Everything else | Not looked at one by one: "other" is the server's value minus the Teaz containers. |
+
+- **CPU** is always a share of the whole server (all cores = 100%), so the
+  Teaz containers and "other" add up to the server's value. CPU and the I/O
+  rates are differences between two rounds, so they're empty for the first
+  10 seconds after Pulse (or a container) starts.
+- **Memory** of a container is what `docker stats` shows: its usage without
+  the page cache the kernel can drop. The server's is total minus available.
+- **History:** the last hour (`pulse.metrics.history`), in memory only.
+  Gone after Pulse restarts; nothing is written anywhere.
+- Locally, `MockDockerClient` and `MockHostProbe` make up a 4-core, 8 GB
+  server with moving values.
+
+`GET /api/metrics` (role `pulse-admin`, not shared cross-origin) returns the
+last measurement and the history; `503` until the first one after startup.
+Fields: see `metrics/MetricsView.java`.
+
 ## Docker access
 
 The backend never mounts the Docker socket. It talks to
@@ -75,7 +106,8 @@ The backend never mounts the Docker socket. It talks to
 (service `docker-proxy` in `compose.yml`) on an internal network, and the proxy
 only lets through:
 
-- `GET /v1.x/containers/json` and `GET /v1.x/containers/<id>/json`
+- `GET /v1.x/containers/json`, `GET /v1.x/containers/<id>/json` and
+  `GET /v1.x/containers/<id>/stats` (resource usage, read only)
 - `POST /v1.x/containers/<id>/start|stop|restart`
 
 Everything else (creating containers, exec, images, volumes, ...) is
@@ -90,8 +122,8 @@ The Docker Engine API version is set by `pulse.docker.api-version`
 - Frontend `frontend/src/auth/`: Keycloak (`.env.production`: `auth.teaz.pro`,
   realm `teazpro`, client `pulse`) in builds, mock user in `npm run dev`.
 - Backend `backend/src/main/java/pro/teaz/pulse/security/`, with the `prod` profile:
-  - `/api/containers/**` (list, start, stop, restart) needs the Keycloak realm
-    role **`pulse-admin`**.
+  - `/api/containers/**` (list, start, stop, restart) and `/api/metrics`
+    (Performance) need the Keycloak realm role **`pulse-admin`**.
   - `/api/health` is open to any logged-in user, also cross-origin from the
     origins in `pulse.cors.allowed-origins` (`application-prod.properties`,
     currently `https://portal.teaz.pro`).

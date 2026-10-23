@@ -79,6 +79,42 @@ class DockerEngineClientTests {
 	}
 
 	@Test
+	void readsStatsOfCgroupV2() {
+		server.expect(requestTo(BASE + "/containers/aaa/stats?stream=false&one-shot=true"))
+				.andExpect(method(HttpMethod.GET))
+				.andRespond(withSuccess("""
+						{"read": "2026-10-23T12:00:00Z",
+						 "cpu_stats": {"cpu_usage": {"total_usage": 5000000000}, "system_cpu_usage": 900000000000,
+						               "online_cpus": 4},
+						 "memory_stats": {"usage": 300000000, "limit": 8000000000,
+						                  "stats": {"inactive_file": 50000000, "anon": 200000000}},
+						 "networks": {"eth0": {"rx_bytes": 1000, "tx_bytes": 200},
+						              "eth1": {"rx_bytes": 500, "tx_bytes": 100}},
+						 "blkio_stats": {"io_service_bytes_recursive": [
+						     {"major": 8, "minor": 0, "op": "read", "value": 4096},
+						     {"major": 8, "minor": 0, "op": "write", "value": 8192}]}}
+						""", MediaType.APPLICATION_JSON));
+
+		assertThat(client.stats("aaa")).isEqualTo(
+				new ContainerStats(5_000_000_000L, 900_000_000_000L, 250_000_000, 8_000_000_000L, 1500, 300, 4096, 8192));
+		server.verify();
+	}
+
+	@Test
+	void readsStatsOfCgroupV1WithoutNetworkOrBlockIo() {
+		server.expect(requestTo(BASE + "/containers/bbb/stats?stream=false&one-shot=true"))
+				.andRespond(withSuccess("""
+						{"cpu_stats": {"cpu_usage": {"total_usage": 7}, "system_cpu_usage": 100},
+						 "memory_stats": {"usage": 1000, "limit": 4000, "stats": {"total_inactive_file": 300}},
+						 "blkio_stats": {"io_service_bytes_recursive": [
+						     {"op": "Read", "value": 10}, {"op": "Write", "value": 20}, {"op": "Total", "value": 30}]}}
+						""", MediaType.APPLICATION_JSON));
+
+		// network_mode: host has no "networks"
+		assertThat(client.stats("bbb")).isEqualTo(new ContainerStats(7, 100, 700, 4000, 0, 0, 10, 20));
+	}
+
+	@Test
 	void postsActions() {
 		server.expect(requestTo(BASE + "/containers/aaa/start")).andExpect(method(HttpMethod.POST))
 				.andRespond(withStatus(HttpStatus.NO_CONTENT));

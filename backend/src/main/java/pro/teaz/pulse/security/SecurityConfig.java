@@ -20,7 +20,7 @@ import pro.teaz.pulse.PulseProperties;
 /**
  * Production security: every request needs a valid Keycloak access token
  * (Bearer JWT) issued by the realm configured in application-prod.properties.
- * Managing containers additionally needs the realm role {@value #ADMIN_ROLE};
+ * Managing containers and the server's metrics additionally need the realm role {@value #ADMIN_ROLE};
  * {@code /api/health} is open to any logged-in user, also cross-origin
  * from the other Teaz apps.
  */
@@ -35,7 +35,7 @@ public class SecurityConfig {
 		http
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers(HttpMethod.GET, "/api/health").authenticated()
-				.requestMatchers("/api/containers/**").hasRole(ADMIN_ROLE)
+				.requestMatchers("/api/containers/**", "/api/metrics/**").hasRole(ADMIN_ROLE)
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
 			.cors(Customizer.withDefaults())

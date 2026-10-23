@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClient;
 /**
  * Docker Engine API over HTTP. In prod that's the socket proxy (see
  * compose.yml), which only lets these exact calls through: list/inspect
- * containers, start/stop/restart one.
+ * containers, read one's stats, start/stop/restart one.
  */
 public class DockerEngineClient implements DockerClient {
 
@@ -69,6 +69,51 @@ public class DockerEngineClient implements DockerClient {
 				"true".equalsIgnoreCase(labels.get(DockerContainer.PROTECTED_LABEL)));
 	}
 
+	/**
+	 * {@code one-shot}: one reading right away, instead of Docker sampling twice a
+	 * second apart; Pulse compares readings of its own rounds.
+	 */
+	@Override
+	public ContainerStats stats(String id) {
+		Stats stats = restClient.get()
+				.uri("/containers/{id}/stats?stream=false&one-shot=true", id)
+				.retrieve()
+				.body(Stats.class);
+
+		Memory memory = stats.memory();
+		Map<String, Long> memoryDetails = memory.stats() != null ? memory.stats() : Map.of();
+		// cgroup v2 calls the droppable page cache inactive_file, v1 total_inactive_file; docker stats subtracts it.
+		long cache = memoryDetails.getOrDefault("inactive_file", memoryDetails.getOrDefault("total_inactive_file", 0L));
+
+		long rx = 0;
+		long tx = 0;
+		if (stats.networks() != null) {
+			for (Network network : stats.networks().values()) {
+				rx += network.rxBytes();
+				tx += network.txBytes();
+			}
+		}
+		long read = 0;
+		long write = 0;
+		if (stats.blkio() != null && stats.blkio().ioServiceBytes() != null) {
+			for (BlkioEntry entry : stats.blkio().ioServiceBytes()) {
+				// v1 writes "Read"/"Write", v2 "read"/"write".
+				if ("read".equalsIgnoreCase(entry.op())) read += entry.value();
+				else if ("write".equalsIgnoreCase(entry.op())) write += entry.value();
+			}
+		}
+
+		return new ContainerStats(
+				stats.cpu().usage().total(),
+				stats.cpu().system(),
+				Math.max(0, memory.usage() - cache),
+				memory.limit(),
+				rx,
+				tx,
+				read,
+				write);
+	}
+
 	@Override
 	public void start(String id) {
 		post("/containers/{id}/start", id);
@@ -119,6 +164,41 @@ public class DockerEngineClient implements DockerClient {
 
 	@JsonIgnoreProperties(ignoreUnknown = true)
 	record Health(@JsonProperty("Status") String status) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Stats(
+			@JsonProperty("cpu_stats") Cpu cpu,
+			@JsonProperty("memory_stats") Memory memory,
+			@JsonProperty("networks") Map<String, Network> networks,
+			@JsonProperty("blkio_stats") Blkio blkio) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Cpu(@JsonProperty("cpu_usage") CpuUsage usage, @JsonProperty("system_cpu_usage") long system) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record CpuUsage(@JsonProperty("total_usage") long total) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Memory(
+			@JsonProperty("usage") long usage,
+			@JsonProperty("limit") long limit,
+			@JsonProperty("stats") Map<String, Long> stats) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Network(@JsonProperty("rx_bytes") long rxBytes, @JsonProperty("tx_bytes") long txBytes) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Blkio(@JsonProperty("io_service_bytes_recursive") List<BlkioEntry> ioServiceBytes) {
+	}
+
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record BlkioEntry(@JsonProperty("op") String op, @JsonProperty("value") long value) {
 	}
 
 	@JsonIgnoreProperties(ignoreUnknown = true)

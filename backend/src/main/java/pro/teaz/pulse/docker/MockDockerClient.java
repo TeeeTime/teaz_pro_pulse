@@ -13,11 +13,17 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * Local-dev stand-in for {@link DockerEngineClient}: a fixed set of fake
  * containers resembling the VPS, kept in memory so start/stop/restart
- * visibly change their state. Used whenever {@code pulse.docker.url} is unset.
+ * visibly change their state, with made-up but plausible resource usage. Used
+ * whenever {@code pulse.docker.url} is unset.
  */
 public class MockDockerClient implements DockerClient {
 
+	/** Host size the made-up usage is measured against, the same as MockHostProbe's. */
+	public static final int CORES = 4;
+	public static final long MEMORY = 8L << 30;
+
 	private final Map<String, DockerContainer> containers = new ConcurrentHashMap<>();
+	private final Instant created = Instant.now();
 
 	public MockDockerClient() {
 		Instant now = Instant.now();
@@ -42,6 +48,27 @@ public class MockDockerClient implements DockerClient {
 	@Override
 	public List<DockerContainer> listManagedContainers() {
 		return new ArrayList<>(containers.values());
+	}
+
+	/**
+	 * Counters that grow at a rate that drifts slowly per container (a few
+	 * percent of the host's CPU, a few hundred MB), so the charts move.
+	 */
+	@Override
+	public ContainerStats stats(String id) {
+		DockerContainer c = get(id);
+		double seconds = Duration.between(created, Instant.now()).toMillis() / 1000.0;
+		int seed = Math.floorMod(id.hashCode(), 97);
+		// Share of the whole host, integrated over time so two readings give that rate.
+		double share = 0.01 + 0.03 * (seed % 5) / 4.0;
+		// Never below 0 and always growing: the rate swings by a quarter around the share.
+		double drift = 30 * (1 + Math.sin(seconds / 120 + seed));
+		double cpuSeconds = CORES * share * (seconds + drift);
+		long system = (long) (CORES * seconds * 1e9);
+		long memory = (long) ((120 + 60 * (seed % 7) + 20 * Math.sin(seconds / 300 + seed)) * (1L << 20));
+		long io = (long) (seconds * (2_000 + 500 * (seed % 4)));
+		return new ContainerStats((long) (cpuSeconds * 1e9), system, c.running() ? memory : 0, MEMORY,
+				io * 3, io, io / 2, io / 4);
 	}
 
 	@Override

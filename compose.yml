@@ -35,7 +35,7 @@ services:
 
   # The backend never gets the Docker socket itself: it talks to this proxy,
   # which lets through exactly the calls Pulse makes (list/inspect containers,
-  # start/stop/restart one) and refuses everything else (create, exec, images,
+  # read one's stats, start/stop/restart one) and refuses everything else (create, exec, images,
   # volumes, ...). Read access to the socket is effectively root on the host,
   # so this is the one place it is mounted.
   docker-proxy:
@@ -50,7 +50,7 @@ services:
       - '-loglevel=info'
       - '-listenip=0.0.0.0'
       - '-allowfrom=backend'
-      - '-allowGET=/v1\.[0-9]+/containers/(json|[a-zA-Z0-9_.-]+/json)'
+      - '-allowGET=/v1\.[0-9]+/containers/(json|[a-zA-Z0-9_.-]+/(json|stats))'
       - '-allowPOST=/v1\.[0-9]+/containers/[a-zA-Z0-9_.-]+/(start|stop|restart)'
       - '-watchdoginterval=3600'
       - '-stoponwatchdog'
