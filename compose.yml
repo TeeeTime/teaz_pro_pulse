@@ -5,6 +5,7 @@ services:
   frontend:
     build: ./frontend
     restart: unless-stopped
+    mem_limit: ${FRONTEND_MEM_LIMIT:-64m}
     networks: [proxy]
     labels:
       - traefik.enable=true
@@ -18,8 +19,11 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
+    mem_limit: ${BACKEND_MEM_LIMIT:-384m}
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      # Heap follows mem_limit; the periodic G1 cycle hands idle memory back to the host.
+      JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000"
     depends_on: [docker-proxy]
     networks: [proxy, docker-api]
     labels:
