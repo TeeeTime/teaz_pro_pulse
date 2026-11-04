@@ -11,7 +11,7 @@ export function createMockAuth(): AuthService {
   return {
     user: readonly(user),
     async init() {
-      user.value = { name: 'Jordan Lee', username: 'jlee', email: 'jordan.lee@example.com' }
+      user.value = { id: '00000000-0000-0000-0000-000000000001', name: 'Jordan Lee', username: 'jlee', email: 'jordan.lee@example.com' }
     },
     async logout() {
       user.value = null

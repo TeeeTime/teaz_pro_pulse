@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { TopBar, useTheme } from '@teeetime/teaz-pro-ui'
+import { ACCOUNT_URL, TopBar, avatarUrl, useTheme } from '@teeetime/teaz-pro-ui'
 import type { TopBarMenuItem } from '@teeetime/teaz-pro-ui'
 import ContainersView from '@/views/ContainersView.vue'
 import PerformanceView from '@/views/PerformanceView.vue'
@@ -13,6 +13,7 @@ const auth = useAuth()
 
 function onMenuSelect(item: TopBarMenuItem) {
   if (item.label === 'Sign out') auth.logout()
+  else if (item.label === 'Account') window.location.href = ACCOUNT_URL
 }
 
 type View = 'containers' | 'performance'
@@ -38,6 +39,7 @@ watch(view, () => {
     app-name="Pulse"
     home-url="https://portal.teaz.pro"
     :user-name="auth.user.value?.name"
+    :avatar-url="avatarUrl(auth.user.value?.id, 64)"
     @select="onMenuSelect"
   />
 
