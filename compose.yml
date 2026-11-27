@@ -1,6 +1,7 @@
 # Production deploy on the VPS: `docker compose up -d --build`.
 # Expects the shared Traefik instance on the external "proxy" network
-# with a certificate resolver named "le", and DOCKER_GID in .env (see README).
+# with a certificate resolver named "le", and DOCKER_GID plus the DEPLOY_*
+# settings in .env (see README, Deployment).
 services:
   frontend:
     build: ./frontend
@@ -24,7 +25,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       # Heap follows mem_limit; the periodic G1 cycle hands idle memory back to the host.
       JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75 -XX:InitialRAMPercentage=10 -XX:G1PeriodicGCInterval=60000"
-    depends_on: [docker-proxy]
+    depends_on: [docker-proxy, deployer]
     networks: [proxy, docker-api]
     labels:
       - traefik.enable=true
@@ -41,7 +42,7 @@ services:
   # which lets through exactly the calls Pulse makes (list/inspect containers,
   # read one's stats, start/stop/restart one) and refuses everything else (create, exec, images,
   # volumes, ...). Read access to the socket is effectively root on the host,
-  # so this is the one place it is mounted.
+  # so apart from the deployer (below), this is the one place it is mounted.
   docker-proxy:
     image: wollomatic/socket-proxy:1.13.1
     restart: unless-stopped
@@ -66,9 +67,49 @@ services:
       - pro.teaz.pulse.app=Pulse
       - pro.teaz.pulse.protected=true
 
+  # Deploy button: `git pull --ff-only` and `docker compose up -d --build` for
+  # one app. Unlike the backend it has the full Docker socket (a build needs
+  # most of the API) and write access to the apps under DEPLOY_ROOT, so it is
+  # effectively root on the host. It only accepts a project name, only from
+  # the backend, and looks up everything else in Docker itself; protected
+  # projects (this one, Traefik, Keycloak) are refused. See README, Deploy.
+  deployer:
+    build:
+      context: ./deployer
+      args:
+        # The host user owning the apps' checkouts and the git deploy keys.
+        DEPLOY_UID: ${DEPLOY_UID:?set DEPLOY_UID in .env, see README}
+        DEPLOY_GID: ${DEPLOY_GID:?set DEPLOY_GID in .env, see README}
+    restart: unless-stopped
+    # The JVM is capped at 48 MB; the rest is for git and the docker compose CLI.
+    # The build itself runs in the Docker engine, not in here.
+    mem_limit: ${DEPLOYER_MEM_LIMIT:-256m}
+    group_add: ["${DOCKER_GID:?set DOCKER_GID in .env, see README}"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    environment:
+      DEPLOY_ROOT: ${DEPLOY_ROOT:?set DEPLOY_ROOT in .env, see README}
+      ALLOW_FROM: backend
+      # docker/buildx keep their state here; the rest of the filesystem is read-only.
+      DOCKER_CONFIG: /tmp/docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path inside as outside: compose resolves build contexts and bind
+      # mounts of the apps by path, and the engine reads them on the host.
+      - ${DEPLOY_ROOT}:${DEPLOY_ROOT}
+      - ${DEPLOY_SSH_DIR:?set DEPLOY_SSH_DIR in .env, see README}:/home/deploy/.ssh:ro
+    networks: [docker-api, deployer-egress]
+    labels:
+      - pro.teaz.pulse.app=Pulse
+      - pro.teaz.pulse.protected=true
+
 networks:
   proxy:
     external: true
   # Backend <-> socket proxy only. internal: no route to the outside world.
   docker-api:
     internal: true
+  # The deployer's way out, for git pull; docker-api has none.
+  deployer-egress: {}

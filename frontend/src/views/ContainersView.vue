@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import ContainerRow from '@/components/ContainerRow.vue'
+import DeployButton from '@/components/DeployButton.vue'
+import DeployPanel from '@/components/DeployPanel.vue'
 import StatusLabel from '@/components/StatusLabel.vue'
-import { ApiError, getJson, post } from '@/api'
-import type { Container, ContainerAction, Status } from '@/types'
+import { ApiError, getJson, post, postJson } from '@/api'
+import type { Container, ContainerAction, DeployJob, Status } from '@/types'
 
 const REFRESH_MS = 10_000
+const DEPLOY_POLL_MS = 2_000
 const SEVERITY: Record<Status, number> = { good: 0, warning: 1, critical: 2 }
 
 const containers = ref<Container[]>([])
@@ -28,13 +31,27 @@ const groups = computed(() => {
     list.push(c)
     byApp.set(c.app, list)
   }
-  return [...byApp].map(([app, list]) => ({
-    app,
-    containers: list,
-    status: worst(list.map((c) => c.status)),
-    running: list.filter((c) => c.state === 'running').length,
-  }))
+  return [...byApp].map(([app, list]) => {
+    const projects = deployableProjects(list)
+    return {
+      app,
+      containers: list,
+      status: worst(list.map((c) => c.status)),
+      running: list.filter((c) => c.state === 'running').length,
+      // Usually one; an app spread over several compose projects gets a button per project.
+      projects: projects.map((project) => ({ project, label: projects.length > 1 ? `Deploy ${project}` : 'Deploy' })),
+    }
+  })
 })
+
+/**
+ * Compose projects in this group that may be deployed: none of the project's
+ * containers (in any group) is protected. The deployer checks this again.
+ */
+function deployableProjects(list: Container[]): string[] {
+  const projects = new Set(list.map((c) => c.project).filter((p): p is string => !!p))
+  return [...projects].filter((p) => !containers.value.some((c) => c.project === p && c.protected))
+}
 
 const overall = computed(() => worst(containers.value.map((c) => c.status)))
 const runningCount = computed(() => containers.value.filter((c) => c.state === 'running').length)
@@ -67,18 +84,86 @@ async function runAction(container: Container, action: ContainerAction) {
   }
 }
 
+/*
+ * Deploys: git pull --ff-only && docker compose up -d --build for a whole
+ * compose project, run by the deployer sidecar. One at a time; the log is
+ * polled while it runs.
+ */
+const deploys = ref<Record<string, DeployJob>>({})
+/** Projects whose deploy log is open. */
+const openDeploys = ref(new Set<string>())
+const deployStarting = ref(false)
+const deployRunning = computed(() => Object.values(deploys.value).some((j) => j.state === 'running'))
+
+async function loadDeploys() {
+  try {
+    for (const job of await getJson<DeployJob[]>('/api/deploys')) {
+      deploys.value[job.project] = job
+      // A deploy started before this page was opened (or by someone else): show it.
+      if (job.state === 'running') openDeploys.value.add(job.project)
+    }
+  } catch {
+    // Deployer down or no permission: the Deploy button reports it when used.
+  }
+}
+
+async function startDeploy(project: string) {
+  deployStarting.value = true
+  try {
+    deploys.value[project] = await postJson<DeployJob>(`/api/deploys/${encodeURIComponent(project)}`)
+    openDeploys.value.add(project)
+    error.value = null
+  } catch (e) {
+    error.value = `Deploy ${project} failed: ${e instanceof Error ? e.message : e}`
+  } finally {
+    deployStarting.value = false
+  }
+}
+
+async function pollDeploys() {
+  const running = Object.values(deploys.value).filter((j) => j.state === 'running')
+  let finished = false
+  for (const job of running) {
+    try {
+      const fresh = await getJson<DeployJob>(`/api/deploys/${encodeURIComponent(job.project)}`)
+      deploys.value[job.project] = fresh
+      if (fresh.state !== 'running') finished = true
+    } catch {
+      // Try again next round; the deployer may be busy or briefly unreachable.
+    }
+  }
+  // New containers, new start times: show them right away.
+  if (finished) await load()
+}
+
+function closeDeploy(project: string) {
+  openDeploys.value.delete(project)
+}
+
+function openDeploysOf(projects: { project: string }[]): DeployJob[] {
+  return projects
+    .filter(({ project }) => openDeploys.value.has(project) && deploys.value[project])
+    .map(({ project }) => deploys.value[project]!)
+}
+
 let refreshTimer: ReturnType<typeof setInterval> | undefined
 let clockTimer: ReturnType<typeof setInterval> | undefined
+let deployTimer: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
   load()
+  loadDeploys()
   refreshTimer = setInterval(load, REFRESH_MS)
   clockTimer = setInterval(() => (now.value = Date.now()), 1000)
+  deployTimer = setInterval(() => {
+    if (deployRunning.value) pollDeploys()
+  }, DEPLOY_POLL_MS)
 })
 
 onBeforeUnmount(() => {
   clearInterval(refreshTimer)
   clearInterval(clockTimer)
+  clearInterval(deployTimer)
 })
 </script>
 
@@ -110,7 +195,23 @@ onBeforeUnmount(() => {
         <h2 class="containers__group-title">{{ group.app }}</h2>
         <StatusLabel :status="group.status" class="containers__group-status" />
         <span class="containers__group-count">{{ group.running }}/{{ group.containers.length }} running</span>
+        <div v-if="group.projects.length" class="containers__group-actions">
+          <DeployButton
+            v-for="p in group.projects"
+            :key="p.project"
+            :label="p.label"
+            :project="p.project"
+            :disabled="deployStarting || deployRunning"
+            @deploy="startDeploy(p.project)"
+          />
+        </div>
       </header>
+      <DeployPanel
+        v-for="job in openDeploysOf(group.projects)"
+        :key="job.project"
+        :job="job"
+        @close="closeDeploy(job.project)"
+      />
       <ul class="containers__list">
         <ContainerRow
           v-for="container in group.containers"
@@ -209,6 +310,12 @@ onBeforeUnmount(() => {
   margin-left: auto;
   font-size: 0.85rem;
   color: var(--color-text-secondary);
+}
+
+.containers__group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Query container for ContainerRow's breakpoints. */

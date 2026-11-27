@@ -7,6 +7,7 @@ import java.time.Instant;
  *
  * @param app        value of the {@value #APP_LABEL} label: the app it belongs to
  * @param service    compose service name, or the container name outside compose
+ * @param project    compose project it was started in, null outside compose
  * @param state      Docker state: created, running, paused, restarting, exited, dead
  * @param health     Docker healthcheck status (starting, healthy, unhealthy), null without healthcheck
  * @param startedAt  last start, null if never started
@@ -18,6 +19,7 @@ public record DockerContainer(
 		String name,
 		String app,
 		String service,
+		String project,
 		String image,
 		String state,
 		String health,

@@ -36,3 +36,7 @@ export async function getJson<T>(path: string): Promise<T> {
 export async function post(path: string): Promise<void> {
   await request('POST', path)
 }
+
+export async function postJson<T>(path: string): Promise<T> {
+  return (await request('POST', path)).json()
+}

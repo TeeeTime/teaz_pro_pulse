@@ -12,6 +12,7 @@ public record ContainerView(
 		String name,
 		String app,
 		String service,
+		String project,
 		String image,
 		String state,
 		String health,
@@ -22,7 +23,7 @@ public record ContainerView(
 		@JsonProperty("protected") boolean protectedContainer) {
 
 	static ContainerView of(DockerContainer c) {
-		return new ContainerView(c.id(), c.name(), c.app(), c.service(), c.image(), c.state(), c.health(),
+		return new ContainerView(c.id(), c.name(), c.app(), c.service(), c.project(), c.image(), c.state(), c.health(),
 				Status.of(c), c.startedAt(), c.finishedAt(), c.restartCount(), c.protectedContainer());
 	}
 }

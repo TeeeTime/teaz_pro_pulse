@@ -53,7 +53,8 @@ class DockerEngineClientTests {
 						           "Health": {"Status": "healthy", "FailingStreak": 0}},
 						 "Config": {"Image": "teaz_pro_portal-backend",
 						            "Labels": {"pro.teaz.pulse.app": "Portal",
-						                       "com.docker.compose.service": "backend"}}}
+						                       "com.docker.compose.service": "backend",
+						                       "com.docker.compose.project": "teaz_pro_portal"}}}
 						""", MediaType.APPLICATION_JSON));
 		server.expect(requestTo(BASE + "/containers/bbb/json"))
 				.andRespond(withSuccess("""
@@ -69,10 +70,10 @@ class DockerEngineClientTests {
 		List<DockerContainer> containers = client.listManagedContainers();
 
 		assertThat(containers).containsExactly(
-				new DockerContainer("aaa", "portal-backend-1", "Portal", "backend", "teaz_pro_portal-backend",
+				new DockerContainer("aaa", "portal-backend-1", "Portal", "backend", "teaz_pro_portal", "teaz_pro_portal-backend",
 						"running", "healthy", Instant.parse("2026-10-17T08:15:30.123456789Z"), null, 2, false),
 				// no compose label: service falls back to the container name; no healthcheck: health null
-				new DockerContainer("bbb", "traefik", "Traefik", "traefik", "traefik:v3.4",
+				new DockerContainer("bbb", "traefik", "Traefik", "traefik", null, "traefik:v3.4",
 						"exited", null, Instant.parse("2026-10-01T10:00:00Z"), Instant.parse("2026-10-17T09:00:00Z"),
 						0, true));
 		server.verify();

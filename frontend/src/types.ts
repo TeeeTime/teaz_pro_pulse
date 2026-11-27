@@ -9,6 +9,8 @@ export interface Container {
   name: string
   app: string
   service: string
+  /** Compose project it was started in (what Deploy acts on), null outside compose */
+  project: string | null
   image: string
   /** Docker state: created, running, paused, restarting, exited, dead */
   state: string
@@ -20,6 +22,20 @@ export interface Container {
   restartCount: number
   /** Can be restarted, but not stopped from Pulse */
   protected: boolean
+}
+
+/** GET /api/deploys/{project}, see the backend's DeployJob. In memory on the deployer: gone after it restarts. */
+export interface DeployJob {
+  project: string
+  state: 'running' | 'succeeded' | 'failed'
+  /** Keycloak user name of whoever clicked Deploy */
+  startedBy: string
+  startedAt: string
+  finishedAt: string | null
+  /** Of the command that ended it; null while running, -1 when it never ran or timed out */
+  exitCode: number | null
+  /** git pull and docker compose output, the last 200,000 characters */
+  log: string
 }
 
 /** GET /api/metrics, see the backend's MetricsView. CPU is a share of the whole server (all cores = 100). */
