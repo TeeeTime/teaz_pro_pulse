@@ -9,13 +9,22 @@ RUN apk add --no-cache openjdk21-jre-headless git openssh-client docker-cli dock
 
 # Runs as the host user who owns the apps' folders (DEPLOY_UID/DEPLOY_GID in .env):
 # files git touches keep their owner, git doesn't call the repos "dubious", and ssh
-# needs the uid to exist in /etc/passwd. Its ~/.ssh is mounted from the host.
+# needs the uid to exist in /etc/passwd. Its ~/.ssh is mounted from the host at
+# /home/deploy/.ssh, and ssh finds it through the home in /etc/passwd.
+# A uid the image already has (0 when the checkouts belong to root) is reused,
+# with its home moved to /home/deploy.
 ARG DEPLOY_UID=1000
 ARG DEPLOY_GID=1000
-RUN (getent group "$DEPLOY_GID" >/dev/null || addgroup -g "$DEPLOY_GID" deploy) \
- && adduser -D -u "$DEPLOY_UID" -G "$(getent group "$DEPLOY_GID" | cut -d: -f1)" -h /home/deploy deploy
+RUN if getent passwd "$DEPLOY_UID" >/dev/null; then \
+      name="$(getent passwd "$DEPLOY_UID" | cut -d: -f1)" \
+      && sed -i "s#^\($name:[^:]*:[^:]*:[^:]*:[^:]*:\)[^:]*#\1/home/deploy#" /etc/passwd \
+      && mkdir -p /home/deploy; \
+    else \
+      (getent group "$DEPLOY_GID" >/dev/null || addgroup -g "$DEPLOY_GID" deploy) \
+      && adduser -D -u "$DEPLOY_UID" -G "$(getent group "$DEPLOY_GID" | cut -d: -f1)" -h /home/deploy deploy; \
+    fi
 
 COPY --from=build /out /app
-USER deploy
+USER ${DEPLOY_UID}:${DEPLOY_GID}
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:+UseSerialGC", "-Xmx48m", "-cp", "/app", "Deployer"]
