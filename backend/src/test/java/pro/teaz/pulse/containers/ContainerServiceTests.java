@@ -87,6 +87,6 @@ class ContainerServiceTests {
 
 	private static DockerContainer container(String id, String app, String service, String state, String health,
 			boolean protectedContainer) {
-		return new DockerContainer(id, id, app, service, "img", state, health, null, null, 0, protectedContainer);
+		return new DockerContainer(id, id, app, service, app.toLowerCase(), "img", state, health, null, null, 0, protectedContainer);
 	}
 }

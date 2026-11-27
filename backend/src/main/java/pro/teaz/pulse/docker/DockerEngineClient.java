@@ -60,6 +60,7 @@ public class DockerEngineClient implements DockerClient {
 				name,
 				labels.get(DockerContainer.APP_LABEL),
 				labels.getOrDefault("com.docker.compose.service", name),
+				labels.get("com.docker.compose.project"),
 				inspect.config().image(),
 				state.status(),
 				state.health() != null ? state.health().status() : null,

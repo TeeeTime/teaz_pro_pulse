@@ -1,5 +1,6 @@
 package pro.teaz.pulse.security;
 
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +21,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import pro.teaz.pulse.deploy.DeployJob;
+import pro.teaz.pulse.deploy.Deployer;
 import pro.teaz.pulse.docker.DockerClient;
 import pro.teaz.pulse.docker.DockerContainer;
 import pro.teaz.pulse.metrics.HostProbe;
@@ -47,10 +50,17 @@ class SecurityConfigTests {
 	@Autowired
 	MetricsSampler sampler;
 
+	// Prod would talk to the deployer sidecar.
+	@MockitoBean
+	Deployer deployer;
+
 	@BeforeEach
 	void containers() {
+		when(deployer.jobs()).thenReturn(List.of());
+		when(deployer.start(anyString(), anyString())).thenReturn(
+				new DeployJob("teaz_pro_portal", "running", "admin", null, null, null, ""));
 		when(docker.listManagedContainers()).thenReturn(List.of(new DockerContainer(
-				"abc", "portal-backend-1", "Portal", "backend", "img", "running", null, null, null, 0, false)));
+				"abc", "portal-backend-1", "Portal", "backend", "teaz_pro_portal", "img", "running", null, null, null, 0, false)));
 	}
 
 	@Test
@@ -60,6 +70,8 @@ class SecurityConfigTests {
 		mvc.perform(get("/api/containers")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/metrics")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/load")).andExpect(status().isUnauthorized());
+		mvc.perform(get("/api/deploys")).andExpect(status().isUnauthorized());
+		mvc.perform(post("/api/deploys/teaz_pro_portal")).andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -88,6 +100,15 @@ class SecurityConfigTests {
 
 		mvc.perform(get("/api/containers").with(jwt().authorities(ADMIN))).andExpect(status().isOk());
 		mvc.perform(post("/api/containers/abc/stop").with(jwt().authorities(ADMIN))).andExpect(status().isNoContent());
+	}
+
+	@Test
+	void deploysNeedAdminRole() throws Exception {
+		mvc.perform(get("/api/deploys").with(jwt())).andExpect(status().isForbidden());
+		mvc.perform(post("/api/deploys/teaz_pro_portal").with(jwt())).andExpect(status().isForbidden());
+
+		mvc.perform(get("/api/deploys").with(jwt().authorities(ADMIN))).andExpect(status().isOk());
+		mvc.perform(post("/api/deploys/teaz_pro_portal").with(jwt().authorities(ADMIN))).andExpect(status().isAccepted());
 	}
 
 	@Test

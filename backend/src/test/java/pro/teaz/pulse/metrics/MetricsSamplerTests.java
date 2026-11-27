@@ -79,7 +79,7 @@ class MetricsSamplerTests {
 	MetricsSampler sampler;
 
 	static DockerContainer container(String id, String app, String service, String state) {
-		return new DockerContainer(id, app.toLowerCase() + "-" + service, app, service, "img", state, null, null, null,
+		return new DockerContainer(id, app.toLowerCase() + "-" + service, app, service, null, "img", state, null, null, null,
 				0, false);
 	}
 
@@ -100,7 +100,7 @@ class MetricsSamplerTests {
 		docker = new FakeDocker();
 		clock = new FakeClock();
 		host = host(0, 0, 6);
-		PulseProperties properties = new PulseProperties(null, new PulseProperties.Cors(List.of()),
+		PulseProperties properties = new PulseProperties(null, null, new PulseProperties.Cors(List.of()),
 				new PulseProperties.Metrics(Duration.ofSeconds(10), Duration.ofMinutes(1)));
 		sampler = new MetricsSampler(docker, () -> host, properties, clock);
 	}

@@ -4,13 +4,17 @@ container in the Teaz ecosystem (apps, Traefik, Keycloak, Postgres).
 
 - Shows each container's status, health check, uptime and restarts, grouped by app.
 - Starts, stops and restarts containers (stop/restart ask for a second click).
+- **Deploy** per app: `git pull --ff-only` and `docker compose up -d --build`
+  in the app's folder on the server, with the log in the page. The apps
+  themselves need nothing for it.
 - **Performance** (second view, switch at the top): the server's CPU, memory
   and disk, the Teaz containers' share of it, the last hour as charts, and
   each Teaz container's CPU, memory, network and disk I/O.
 - Serves `GET /api/health`, the health of every app, and `GET /api/load`, the
   server's CPU and memory charts, for other apps (Portal's tiles).
 
-Monorepo: `frontend/` (Vue 3 + TypeScript) and `backend/` (Spring Boot, `pro.teaz:pulse`).
+Monorepo: `frontend/` (Vue 3 + TypeScript), `backend/` (Spring Boot, `pro.teaz:pulse`)
+and `deployer/` (the Deploy button's sidecar, plain Java).
 
 Stack, conventions, style guide and color tokens shared by every Teaz app
 live in **`teaz_pro`**: start with `docs/TECH_STACK.md` there. This
@@ -72,6 +76,54 @@ in that project afterwards.
 An app's status is the worst of its containers. "Down" includes containers
 stopped on purpose.
 
+## Deploy
+
+Every app group in the container view has a **Deploy** button (it asks for a
+second click). It runs, in the folder the app was started from:
+
+```sh
+git pull --ff-only
+docker compose -p <project> -f <its compose files> up -d --build
+```
+
+and shows the output live below the group. One deploy at a time, across all
+apps; 20 minutes at most.
+
+- **Which folder:** Docker Compose labels every container with the project it
+  belongs to and the folder and files it was started from
+  (`com.docker.compose.project`, `…project.working_dir`, `…project.config_files`).
+  So any app started with `docker compose up` in its checkout can be deployed,
+  without changes to the app. An app spread over two compose projects gets a
+  button per project.
+- **Not deployable:** projects with a `pro.teaz.pulse.protected` container
+  (Pulse itself, Traefik, Keycloak): a broken build there leaves no way back
+  in. Deploy those by hand. Same for containers not started by compose.
+- **`--ff-only`:** if the checkout on the server has local commits or
+  changes, the pull fails instead of merging; fix it by hand.
+- **History:** only the last deploy per project, in the deployer's memory.
+
+### The deployer container
+
+The backend still never touches the Docker socket. Deploys run in a separate
+container, `deployer` in `compose.yml` (`deployer/Deployer.java`, JDK only,
+with git, ssh and the docker CLI with compose and buildx):
+
+| | |
+| - | - |
+| Has | The full Docker socket (a build needs most of the API), the apps' folders under `DEPLOY_ROOT` read-write at the same path, `DEPLOY_SSH_DIR` read-only as its `~/.ssh` |
+| Runs as | `DEPLOY_UID`:`DEPLOY_GID` plus the docker group: the host user who owns the checkouts, so pulled files keep their owner and git trusts the repos |
+| Reachable | Only on the internal `docker-api` network, and it answers only the `backend` container. Its other network, `deployer-egress`, is for `git pull` |
+| Accepts | A compose project name, nothing else. Folder and compose files come from Docker's labels and must lie under `DEPLOY_ROOT`; the project must have a `pro.teaz.pulse.app` container and no protected one. No shell: fixed commands with arguments |
+
+It is effectively root on the host, like anything with the socket. The point
+of the split is that the backend, which faces the internet, can only ask it
+to redeploy an existing, labelled app.
+
+`GET/POST /api/deploys/{project}` and `GET /api/deploys` (role
+`pulse-admin`) pass through to it; the backend logs who started which deploy.
+Locally, without `pulse.deployer.url`, `MockDeployer` plays a made-up deploy
+(Demo's fails).
+
 ## Performance
 
 The view switch at the top of the page (`?view=performance` in the URL)
@@ -114,6 +166,7 @@ only lets through:
 Everything else (creating containers, exec, images, volumes, ...) is
 refused, so a compromised backend can't take over the host. On top of
 that, the backend only acts on containers carrying `pro.teaz.pulse.app`.
+Deploys go through the separate `deployer` container, see Deploy.
 
 The Docker Engine API version is set by `pulse.docker.api-version`
 (default `v1.44`, Docker 25+).
@@ -123,8 +176,8 @@ The Docker Engine API version is set by `pulse.docker.api-version`
 - Frontend `frontend/src/auth/`: Keycloak (`.env.production`: `auth.teaz.pro`,
   realm `teazpro`, client `pulse`) in builds, mock user in `npm run dev`.
 - Backend `backend/src/main/java/pro/teaz/pulse/security/`, with the `prod` profile:
-  - `/api/containers/**` (list, start, stop, restart) and `/api/metrics`
-    (Performance) need the Keycloak realm role **`pulse-admin`**.
+  - `/api/containers/**` (list, start, stop, restart), `/api/deploys/**`
+    and `/api/metrics` (Performance) need the Keycloak realm role **`pulse-admin`**.
   - `/api/health` and `/api/load` are open to any logged-in user, also
     cross-origin from the origins in `pulse.cors.allowed-origins`
     (`application-prod.properties`, currently `https://portal.teaz.pro`).
@@ -217,12 +270,29 @@ To try a real engine locally, set `pulse.docker.url` (e.g. Docker Desktop's
 
 ## Deployment
 
-Once on the VPS, before the first start, tell the socket proxy which group
-may read the Docker socket (`.env` is gitignored):
+Once on the VPS, before the first start, create `.env` (gitignored) for the
+socket proxy and the deployer. Run it as the user who owns the apps'
+checkouts and pulls them today:
 
 ```sh
-echo "DOCKER_GID=$(getent group docker | cut -d: -f3)" > .env
+cat > .env <<EOF
+DOCKER_GID=$(getent group docker | cut -d: -f3)
+DEPLOY_UID=$(id -u)
+DEPLOY_GID=$(id -g)
+# Parent folder of all app checkouts; the deployer only deploys below it.
+DEPLOY_ROOT=/srv
+# That user's ssh folder: deploy key(s) and known_hosts for the git remotes.
+DEPLOY_SSH_DIR=$HOME/.ssh
+EOF
 ```
+
+- Every app to deploy must have been started with `docker compose up` from
+  its checkout below `DEPLOY_ROOT`, and be owned by `DEPLOY_UID`.
+- `DEPLOY_SSH_DIR` is mounted read-only: the git hosts must already be in its
+  `known_hosts` (they are, if that user has pulled before), and the keys
+  must work without a passphrase or agent. HTTPS remotes with a
+  credential prompt fail instead of waiting.
+- After changing `DEPLOY_UID`/`DEPLOY_GID`, rebuild: `docker compose up -d --build`.
 
 Then, as for every app:
 
@@ -233,4 +303,6 @@ git pull && docker compose up -d --build
 `compose.yml` routes `pulse.teaz.pro` to the frontend (nginx) and
 `pulse.teaz.pro/api/*` to the backend, via the shared Traefik (network
 `proxy`, cert resolver `le`). The backend additionally sits on the
-internal network `docker-api` with the socket proxy.
+internal network `docker-api` with the socket proxy and the deployer.
+
+Pulse is protected, so it can't deploy itself: update it by hand as above.

@@ -27,20 +27,20 @@ public class MockDockerClient implements DockerClient {
 
 	public MockDockerClient() {
 		Instant now = Instant.now();
-		add("traefik", "Traefik", "traefik", "traefik:v3.4", "running", null, now.minus(Duration.ofDays(12)), 0, true);
-		add("keycloak", "Keycloak", "keycloak", "quay.io/keycloak/keycloak:26.2", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
-		add("keycloak-db", "Keycloak", "postgres", "postgres:17", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
-		add("portal-frontend", "Portal", "frontend", "teaz_pro_portal-frontend", "running", null, now.minus(Duration.ofHours(5)), 0, false);
-		add("portal-backend", "Portal", "backend", "teaz_pro_portal-backend", "running", "unhealthy", now.minus(Duration.ofHours(5)), 3, false);
-		add("pulse-frontend", "Pulse", "frontend", "teaz_pro_pulse-frontend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
-		add("pulse-backend", "Pulse", "backend", "teaz_pro_pulse-backend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
-		add("demo-worker", "Demo", "worker", "teaz_pro_demo-worker", "exited", null, null, 1, false);
+		add("traefik", "Traefik", "traefik", "traefik", "traefik:v3.4", "running", null, now.minus(Duration.ofDays(12)), 0, true);
+		add("keycloak", "Keycloak", "keycloak", "keycloak", "quay.io/keycloak/keycloak:26.2", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
+		add("keycloak-db", "Keycloak", "postgres", "keycloak", "postgres:17", "running", "healthy", now.minus(Duration.ofDays(12)), 0, true);
+		add("portal-frontend", "Portal", "frontend", "teaz_pro_portal", "teaz_pro_portal-frontend", "running", null, now.minus(Duration.ofHours(5)), 0, false);
+		add("portal-backend", "Portal", "backend", "teaz_pro_portal", "teaz_pro_portal-backend", "running", "unhealthy", now.minus(Duration.ofHours(5)), 3, false);
+		add("pulse-frontend", "Pulse", "frontend", "teaz_pro_pulse", "teaz_pro_pulse-frontend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
+		add("pulse-backend", "Pulse", "backend", "teaz_pro_pulse", "teaz_pro_pulse-backend", "running", null, now.minus(Duration.ofMinutes(42)), 0, true);
+		add("demo-worker", "Demo", "worker", "teaz_pro_demo", "teaz_pro_demo-worker", "exited", null, null, 1, false);
 	}
 
-	private void add(String name, String app, String service, String image, String state, String health,
+	private void add(String name, String app, String service, String project, String image, String state, String health,
 			Instant startedAt, int restartCount, boolean protectedContainer) {
 		String id = "mock-" + name;
-		containers.put(id, new DockerContainer(id, name, app, service, image, state, health, startedAt,
+		containers.put(id, new DockerContainer(id, name, app, service, project, image, state, health, startedAt,
 				state.equals("running") ? null : Instant.now().minus(Duration.ofHours(2)), restartCount,
 				protectedContainer));
 	}
@@ -91,7 +91,7 @@ public class MockDockerClient implements DockerClient {
 		DockerContainer c = get(id);
 		// A fresh start clears a failing healthcheck, which is what a restart is usually for.
 		String health = c.health() == null ? null : "healthy";
-		containers.put(id, new DockerContainer(c.id(), c.name(), c.app(), c.service(), c.image(), state, health,
+		containers.put(id, new DockerContainer(c.id(), c.name(), c.app(), c.service(), c.project(), c.image(), state, health,
 				startedAt, finishedAt, c.restartCount(), c.protectedContainer()));
 	}
 
