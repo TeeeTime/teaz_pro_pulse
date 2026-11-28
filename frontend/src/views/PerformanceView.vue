@@ -444,7 +444,7 @@ onBeforeUnmount(() => clearTimeout(timer))
   }
 }
 
-@media (max-width: 420px) {
+@container (max-width: 420px) {
   .performance {
     padding: 16px 12px 48px;
   }

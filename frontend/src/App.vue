@@ -65,6 +65,7 @@ watch(view, () => {
 
 <style scoped>
 .views {
+  container-type: inline-size;
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px 24px 0;
@@ -106,7 +107,7 @@ watch(view, () => {
   background-color: var(--color-surface-active);
 }
 
-@media (max-width: 420px) {
+@container (max-width: 420px) {
   .views {
     padding: 16px 12px 0;
   }

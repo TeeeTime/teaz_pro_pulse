@@ -228,6 +228,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .containers {
+  container-type: inline-size;
   max-width: 1200px;
   margin: 0 auto;
   /* Below the view switch in App.vue. */
@@ -325,7 +326,7 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
-@media (max-width: 420px) {
+@container (max-width: 420px) {
   .containers {
     padding: 16px 12px 48px;
   }
